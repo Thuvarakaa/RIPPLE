@@ -1,0 +1,184 @@
+<!-- pages/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RIPPLE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- We still need Leaflet for the Map because making a map from scratch is too hard -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        /* Simple CSS Styles */
+        body {
+            font-family: Lato, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto; /* Centers the div */
+            background-color: white;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 2px solid #ddd;
+        }
+
+        /* Make the video image responsive */
+        #cam-stream {
+            width: 100%;
+            height: auto;
+            display: block;
+            margin-bottom: 10px;
+            background-color: #000;
+        }
+
+        /* Map Settings */
+        #map {
+            height: 300px;
+            width: 100%;
+        }
+
+        /* Stat numbers styling */
+        .stat {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: blue;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>RIPPLE</h1>
+
+        <!-- SECTION 1: VIDEO -->
+        <div class="section">
+            <h2>Live Camera</h2>
+            <!-- The source will be set by JavaScript below -->
+            <img src="/video" margin-top:100px; style="transform:rotate(180deg)"; />
+            
+           
+        </div>
+
+        <!-- SECTION 2: GPS DATA -->
+        <div class="section">
+            <h2>GPS Location</h2>
+            <p>Latitude: <span id="lat" class="stat">--</span></p>
+            <p>Longitude: <span id="lon" class="stat">--</span></p>
+            <!-- <p>Speed: <span id="speed" class="stat">0</span> km/h</p> -->
+            <!-- <p>Satellites: <span id="sats" class="stat">0</span></p> -->
+        </div>
+
+        <!-- SECTION 3: MAP -->
+        <div class="section">
+            <h2>Map View</h2>
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- SETTINGS ---
+        // If testing on computer, we use a fake image.
+        // If on the ESP32, we use the real stream.
+        var isLocal = window.location.hostname === "localhost" || window.location.protocol === 'file:';
+        var streamUrl = isLocal ? "https://www.water.com/media/cms/a-us.storyblok.com/f/1021132/2800x986/f420e28233/types-of-water-water-surface.webp?quality=85&width=1024&dpr=2" : window.location.origin + ":81/stream";
+        
+        // 1. Setup the Map
+        var map = L.map('map').setView([0, 0], 2); // Start at zoom level 2
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        var marker = null; // We will add this later when we get data
+
+        // 2. Set the Camera Image
+        document.getElementById('cam-stream').src = streamUrl;
+
+        // 3. Function to get Data from ESP32
+        function getGPSData() {
+            // We ask the ESP32 for the data at this address
+            fetch('/api/gps')
+                .then(response => response.json()) // Convert text to JSON
+                .then(data => {
+                    // Update the HTML text
+                    document.getElementById('lat').innerText = data.lat.toFixed(6);
+                    document.getElementById('lon').innerText = data.lon.toFixed(6);
+                    // document.getElementById('speed').innerText = data.speed.toFixed(1);
+                    // document.getElementById('sats').innerText = data.satellites;
+
+                    // Update the Map
+                    updateMap(data.lat, data.lon);
+                })
+                .catch(error => {
+                    console.log("Error getting data: " + error);
+                    // For testing on computer, create fake movement
+                    if (isLocal) simulateData(); 
+                });
+        }
+
+        // 4. Function to move the map marker
+        function updateMap(lat, lon) {
+            // If GPS is 0,0 it means no signal, so don't move map
+            if (lat === 0 && lon === 0) return;
+
+            if (marker === null) {
+                // If marker doesn't exist, create it
+                marker = L.circleMarker([lat, lon], {
+                    color: '#007bff',      // Blue border
+                    fillColor: '#007bff',  // Blue fill
+                    fillOpacity: 0.5,      // Semi-transparent (The "Ripple" look)
+                    radius: 12             // Size
+                }).addTo(map);
+                
+                map.setView([lat, lon], 15); // Zoom in
+            } else {
+                // If marker exists, just move it
+                marker.setLatLng([lat, lon]);
+            }
+        }
+
+        // 5. Button Functions
+        function refreshStream() {
+            var img = document.getElementById('cam-stream');
+            // Adding a random number (?t=...) forces the browser to reload the image
+            img.src = streamUrl + "?t=" + new Date().getTime();
+        }
+
+        function toggleFlash() {
+            fetch('/control?var=flash&val=toggle');
+        }
+
+        // --- SIMULATION (Just for testing on your PC) ---
+        var simLat = 40.7128;
+        var simLon = -74.0060;
+        function simulateData() {
+            simLat += 0.0001;
+            simLon += 0.0001;
+            document.getElementById('lat').innerText = simLat.toFixed(6);
+            document.getElementById('lon').innerText = simLon.toFixed(6);
+            // document.getElementById('speed').innerText = (Math.random() * 10).toFixed(1);
+            updateMap(simLat, simLon);
+        }
+
+        // 6. Run the loop
+        // Run getGPSData every 2000 milliseconds (2 seconds)
+        setInterval(getGPSData, 2000);
+
+    </script>
+</body>
+</html>

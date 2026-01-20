@@ -1,12 +1,10 @@
 import time
-from machine import UART
-import board
-import os
+from machine import UART, Pin
 import sys
 
-print(dir(board))
+Pin(13, Pin.IN)
+Pin(14, Pin.OUT)
 
-'''
 uart1 = UART(1, baudrate=9600, bits=8, parity=None, rx=13, tx=14, stop=1)
 uart1.init()
 print('Successfully initialized')
@@ -31,7 +29,7 @@ for runs in range(0, 10):
         print(buf)
         
         
-        '''
+        
 
 #time.sleep(0)
 #one_line = uart1.read()

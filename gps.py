@@ -6,6 +6,7 @@ from micropyGPS import MicropyGPS
 RX_PIN = 13
 TX_PIN = 14
 WAIT_MS = 4000
+POLL_MS = 100
 POLL_PRINT_TIME_S = 5
  
 def init():
@@ -43,7 +44,7 @@ def main():
             buf = acquire_data(uart=uart)
             for char in buf:
                 my_gps.update(char)
-            time.sleep_ms(100)
+            time.sleep_ms(POLL_MS)
             cur_time = time.time()
             if (((cur_time - start_time) % POLL_PRINT_TIME_S) < 0.1) and ((cur_time - start_time) != last_print_time):
                 print(f"Time elapsed: {cur_time - start_time}")

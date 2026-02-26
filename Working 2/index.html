@@ -1,0 +1,131 @@
+<!-- pages/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RIPPLE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- We still need Leaflet for the Map because making a map from scratch is too hard -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        /* Simple CSS Styles */
+        body {
+            font-family: Lato, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto; /* Centers the div */
+            background-color: white;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 2px solid #ddd;
+        }
+
+        /* Make the video image responsive */
+        #cam-stream {
+            width: 100%;
+            height: auto;
+            display: block;
+            margin-bottom: 10px;
+            background-color: #000;
+        }
+
+        /* Map Settings */
+        #map {
+            height: 300px;
+            width: 100%;
+        }
+
+        /* Stat numbers styling */
+        .stat {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: blue;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>RIPPLE</h1>
+
+        <div class="section">
+            <h2>Live Camera</h2>
+            <img id="cam-stream" src="/video" style="transform: rotate(180deg); margin-top: 20px; width: 100%;" />
+        </div>
+
+        <div class="section">
+            <h2>GPS Location</h2>
+            <p>Latitude: <span id="lat" class="stat">{{my_gps.latitude}}</span></p>
+            <p>Longitude: <span id="lon" class="stat">{{my_gps.longitude}}</span></p>
+        </div>
+
+        <div class="section">
+            <h2>Map View</h2>
+            <div id="map" style="height: 300px; width: 100%;"></div>
+        </div>
+    </div>
+
+    <script>
+        // 1. Initialize Map
+        var map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        var marker = null;
+
+        // 2. Map Update Function
+        function updateMap(lat, lon) {
+            // Avoid placing marker at 0,0 if GPS isn't ready
+            if (lat === 0 && lon === 0) return;
+
+            if (marker === null) {
+                marker = L.marker([lat, lon]).addTo(map);
+                map.setView([lat, lon], 15);
+            } else {
+                marker.setLatLng([lat, lon]);
+            }
+        }
+
+        // 3. Fetch Data from ESP32
+        function getGPSData() {
+            fetch('/api/gps')
+                .then(response => response.json())
+                .then(data => {
+                    // Update the numbers in the HTML
+                    // Note: If your ESP sends 'latitude' instead of 'lat', change data.lat to data.latitude
+                    if(data.lat && data.lon) {
+                        document.getElementById('lat').innerText = data.lat.toFixed(6);
+                        document.getElementById('lon').innerText = data.lon.toFixed(6);
+                        updateMap(data.lat, data.lon);
+                    }
+                })
+                .catch(error => console.log("GPS Fetch Error:", error));
+        }
+
+        // 4. Start the loop
+        setInterval(getGPSData, 2000);
+    </script>
+
+</body>
+
+</html>

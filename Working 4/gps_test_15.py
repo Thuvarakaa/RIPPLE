@@ -1,44 +1,80 @@
 import time
 from machine import UART, Pin
+import sys
+from micropyGPS import MicropyGPS
 
-# Using UART 2 for the software-based connection
-# Pin 12 is a dummy TX since we only need to receive data from the GPS
+# --- PIN CONFIGURATION ---
+PROX_RX = 13
+PROX_TRIG = 14
 GPS_RX_PIN = 15
-DUMMY_TX_PIN = 12 
 
-def test_gps():
-    print("--- RIPPLE GPS Pulse Test (GPIO 15) ---")
+def init_systems():
+    # 1. Initialize Proximity (Hardware UART 1)
+    prox_uart = UART(1, baudrate=9600, rx=PROX_RX, tx=PROX_TRIG)
+    trigger = Pin(PROX_TRIG, Pin.OUT)
+    trigger.value(1)
     
-    # Initialize UART
-    # 9600 is the standard baud rate for almost all GPS modules
-    gps_serial = UART(2, baudrate=9600, rx=GPS_RX_PIN, tx=DUMMY_TX_PIN, timeout=1000)
+    # 2. Initialize GPS (Using UART 2 as Software UART on Pin 15)
+    # Pin 12 is used as a placeholder TX pin since we only need to receive
+    gps_uart = UART(2, baudrate=9600, rx=GPS_RX_PIN, tx=12) 
     
-    print("Listening for NMEA sentences...")
-    print("(If you see nothing, try swapping GPS TX to a different pin or check power)")
+    print("--- RIPPLE SYSTEMS ONLINE ---")
+    return prox_uart, gps_uart, trigger
 
+def get_proximity(uart, trigger_pin):
+    # Trigger the sensor
+    trigger_pin.value(0)
+    time.sleep_us(10)
+    trigger_pin.value(1)
+    
+    start = time.ticks_ms()
+    # Wait for the 4-byte response
+    while (time.ticks_ms() - start) < 150:
+        if uart.any() >= 4:
+            data = uart.read(4)
+            if data[0] == 0xFF:
+                # Checksum validation
+                if (data[0] + data[1] + data[2]) & 0xFF == data[3]:
+                    return (data[1] << 8) + data[2]
+    return None
+
+def main():
+    prox_uart, gps_uart, trigger = init_systems()
+    my_gps = MicropyGPS()
+    
+    print("Monitoring sensors... Press Ctrl+C to stop.")
+    
     while True:
         try:
-            if gps_serial.any():
-                # Read whatever is in the buffer
-                raw_data = gps_serial.read()
-                
-                try:
-                    # GPS data is standard ASCII text
-                    text_data = raw_data.decode('utf-8')
-                    print(text_data, end='')
-                except:
-                    # If decoding fails, show the raw bytes
-                    print("Raw Bytes:", raw_data)
+            # --- PROXIMITY SECTION ---
+            dist = get_proximity(prox_uart, trigger)
+            if dist is not None:
+                # Adding the print statement for proximity
+                print(f"[PROX] Object at: {dist} mm")
             else:
-                # If the buffer is empty, show the physical pin state
-                p15 = Pin(GPS_RX_PIN, Pin.IN)
-                print(f"Polling... Pin 15 State: {p15.value()}")
-                
-            time.sleep(1)
+                print("[PROX] No reading...")
+
+            # --- GPS SECTION ---
+            while gps_uart.any():
+                char = chr(gps_uart.read(1)[0])
+                my_gps.update(char)
+            
+            # Print GPS every few seconds if we have a valid fix
+            if my_gps.satellites_in_use > 0:
+                lat = my_gps.latitude_string()
+                lon = my_gps.longitude_string()
+                print(f"[GPS] Sats: {my_gps.satellites_in_use} | Loc: {lat}, {lon}")
+            else:
+                # Helps you know the GPS is powered but just searching
+                print("[GPS] Searching for satellites...")
+            
+            print("-" * 30) # Visual separator for the shell
+            time.sleep_ms(500) # Check twice per second
             
         except KeyboardInterrupt:
-            print("\nTest stopped.")
+            print("\nShutting down RIPPLE...")
             break
 
 if __name__ == "__main__":
-    test_gps()
+    main()
+

@@ -1,0 +1,91 @@
+CLASS SharedData:
+    // Attributes for thread-safe state management
+    sensor_states = {"distance": 0, "lat": 0, "lon": 0, "sats": 0}
+    update_timestamps = 0
+
+    FUNCTION update_data(key, value):
+        Set sensor_states[key] = value
+        Update update_timestamps to current time
+
+    FUNCTION get_latest_data():
+        RETURN sensor_states
+
+CLASS ProximitySensor:
+    // Logic for UART-based distance sensing (13/14)
+    FUNCTION get_distance():
+        FLUSH UART buffer
+        SEND trigger_protocol byte (0x55)
+        IF 4 bytes received within timeout:
+            RETURN validate_frame()
+
+    FUNCTION validate_frame():
+        // Checksum: (Header + H + L) & 0xFF
+        IF header == 0xFF AND checksum_is_valid:
+            distance_logic = (HighByte << 8) + LowByte
+            RETURN distance_logic
+
+CLASS GPSInterface:
+    // Logic for NMEA parsing (Pin 15)
+    FUNCTION get_coordinates():
+        WHILE data available on UART:
+            READ byte and update MicropyGPS parser
+        
+    FUNCTION convert_format():
+        // Convert Degrees/Minutes to Decimal Degrees
+        lat_dd = degrees + (minutes / 60)
+        IF hemisphere == 'S': lat_dd = -lat_dd
+        lon_dd = degrees + (minutes / 60)
+        IF hemisphere == 'W': lon_dd = -lon_dd
+        RETURN lat_dd, lon_dd
+
+CLASS CameraStreaming:
+    // Logic for ESP32-S3 Camera and MJPEG stream
+    FUNCTION capture_frames():
+        INITIALIZE camera with init_params (pins, freq, PSRAM)
+        WHILE active:
+            buffer = capture image from sensor
+            YIELD jpeg_encoding of buffer
+
+    FUNCTION stream_mjpeg():
+        START multipart/x-mixed-replace HTTP response
+        FOR EACH frame FROM capture_frames():
+            WRITE frame to response stream
+
+CLASS APIDataService:
+    // Logic for providing JSON telemetry to the dashboard
+    FUNCTION get_shared_state():
+        raw_data = SharedData.get_latest_data()
+        // Process raw GPS through convert_format()
+        RETURN processed_telemetry
+
+    FUNCTION package_json():
+        data = get_shared_state()
+        RETURN JSON_STRING(data)
+
+CLASS WebServer:
+    // Orchestration of the Picoweb app and background tasks
+    FUNCTION register_routes():
+        ROUTE "/" TO WebDashboard.render_layout()
+        ROUTE "/api/data" TO APIDataService.package_json()
+        ROUTE "/video" TO CameraStreaming.stream_mjpeg()
+
+    FUNCTION handle_asynchronous():
+        INITIALIZE WiFi (SSID: "Vedashri")
+        START background_thread for ProximitySensor and GPSInterface
+        START WebServer.run()
+
+CLASS WebDashboard:
+    // Frontend logic running in the browser
+    FUNCTION render_layout():
+        SERVE index.html from flash memory
+        LOAD map_libraries (Leaflet.js)
+
+    FUNCTION display_stream():
+        SET polling_interval = 1000ms
+        EVERY interval:
+            FETCH /api/data
+            UPDATE map marker and text stats
+            IF distance < 500: TRIGGER alert_active
+
+MAIN:
+    WebServer.handle_asynchronous()

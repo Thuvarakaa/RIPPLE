@@ -96,7 +96,7 @@
     </div>
 
     <script>
-        // 1. Initialize Map
+        // Initialize map
         var map = L.map('map').setView([0, 0], 2);
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
@@ -116,13 +116,13 @@
             }
         }
 
-        // 2. Fetch Integrated Data from ESP32
+        // Fetch integrated data from ESP32
         function getSensorData() {
             // Updated to a generic /api/data endpoint which should return both GPS and Prox
             fetch('/api/data')
                 .then(response => response.json())
                 .then(data => {
-                    // Update Proximity
+                    // Update proximity
                     if (data.distance !== undefined) {
                         const distEl = document.getElementById('dist');
                         const statusEl = document.getElementById('prox-status');

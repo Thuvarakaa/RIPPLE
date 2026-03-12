@@ -1,4 +1,3 @@
-# wifi.py
 import network
 import utime
 

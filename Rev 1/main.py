@@ -1,4 +1,3 @@
-# main.py
 import picoweb
 import wifi
 import camera_service
@@ -13,20 +12,20 @@ PASSWORD = "vedashri18"
 
 def sensor_background_thread():
     # Init Sensors (UART 1: Prox 13/14, UART 2: GPS 15)
-    # Note: Pin 14 is handled by the UART peripheral as TX; no manual Pin(14) needed.
+    # Pin 14 is handled by the UART peripheral as TX; no manual Pin(14) needed
     prox_uart = UART(1, baudrate=9600, bits=8, parity=None, rx=13, tx=14, stop=1)
     gps_uart = UART(2, baudrate=9600, bits=8, parity=None, rx=15, tx=12, stop=1)
     
     print("Background Thread: Prox (13/14) and GPS (15) Active")
 
     while True:
-        # --- 1. HANDLE GPS ---
+        # HANDLE GPS
         if gps_uart.any():
             lines = gps_uart.read() 
             for b in lines:
                 gps_data.update(chr(b))
         
-        # --- 2. HANDLE PROXIMITY ---
+        # HANDLE PROXIMITY
         # Clear any old data from the buffer to ensure a fresh reading
         while prox_uart.any():
             prox_uart.read()
@@ -53,20 +52,20 @@ def sensor_background_thread():
         time.sleep_ms(50) # Loop delay for stability
 
 def main():
-    camera_service.init() # Uncomment if camera is needed
+    camera_service.init()
     ip_addr = wifi.connect(SSID, PASSWORD) 
     print("The IP Address is:", ip_addr)
 
     # Start the background sensor thread
     _thread.start_new_thread(sensor_background_thread, ()) 
 
-    # 1. Create the app first
+    # Create the app
     app = picoweb.WebApp(__name__, web_routes.ROUTES) 
 
-    # 2. Pass the app instance to web_routes
+    # Pass the app instance to web_routes
     web_routes.set_app(app) 
 
-    # 3. Add the camera route
+    # Add the camera route
     web_routes.ROUTES.append(("/video", camera_service.video)) 
 
     # Start the web server
